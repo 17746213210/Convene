@@ -39,18 +39,18 @@ public struct ConveneConfiguration: Equatable, Sendable {
             tcp.connectionTimeout = 10
         }
         let parameters = NWParameters(tls: nil, tcp: tcp)
-        ht_applyLAN(parameters)
+        applyLANConstraints(parameters)
         return parameters
     }
 
     /// Bonjour browse/advertise. Keep this off AWDL and IPv6 link-local.
     public static func browseParameters() -> NWParameters {
         let parameters = NWParameters.tcp
-        ht_applyLAN(parameters)
+        applyLANConstraints(parameters)
         return parameters
     }
 
-    private static func ht_applyLAN(_ parameters: NWParameters) {
+    private static func applyLANConstraints(_ parameters: NWParameters) {
         parameters.includePeerToPeer = false
         parameters.allowLocalEndpointReuse = false
         if let ipOptions = parameters.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
