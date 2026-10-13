@@ -6,7 +6,7 @@
 - 一条 TCP 会话，同一时刻一个对端
 - 连上之后两端都能发、都能收
 - 帧：应用消息 / ping / pong / close
-- iOS 13+、tvOS 13+、macOS 10.15+
+- iOS 15+、tvOS 15+、macOS 12+
 
 ## 角色
 
@@ -101,12 +101,15 @@ session.disconnect()
 
 ```swift
 func browser(_ browser: ConveneBrowser, didUpdate devices: [ConveneDevice]) {}
+func browser(_ browser: ConveneBrowser, didUpdateAirPlay devices: [ConveneAirPlayDevice]) {}
 func sessionDidConnect(_ session: ConveneSession) {}
 func sessionDidDisconnect(_ session: ConveneSession) {}
 func session(_ session: ConveneSession, didReceive message: String) {}
 ```
 
 `ConveneDevice.id` 来自 TXT `id`，`name` 是 Bonjour 显示名。`applicationId` 非空时，只保留 TXT `app` 匹配的设备。
+
+`start()` 同时浏览 `_airplay._tcp`。只保留 TXT `model` 以 `AppleTV` 开头的设备，通过 `didUpdateAirPlay` 回调。这路只表示硬件在网上，不表示 App 已打开。是否把两路合成一条，由接入方决定。
 
 Host、Browser、Session 均 `@MainActor`。
 

@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'Convene'
-  s.version          = '1.0.1'
+  s.version          = '1.0.2'
   s.summary          = 'Nearby devices find each other and exchange UTF-8 messages on the LAN.'
   s.description      = <<-DESC
     Convene is a host/guest channel: Bonjour discovery, one TCP session, string payloads.
@@ -11,9 +11,9 @@ Pod::Spec.new do |s|
   s.author           = { 'Convene' => 'convene@localpods.dev' }
   s.source           = { :git => 'https://github.com/17746213210/Convene.git', :tag => s.version.to_s }
   s.swift_version    = '5.9'
-  s.ios.deployment_target  = '13.0'
-  s.tvos.deployment_target = '13.0'
-  s.osx.deployment_target  = '10.15'
+  s.ios.deployment_target  = '15.0'
+  s.tvos.deployment_target = '15.0'
+  s.osx.deployment_target  = '12.0'
   s.frameworks       = 'Foundation', 'Network'
 
   s.subspec 'Core' do |ss|
