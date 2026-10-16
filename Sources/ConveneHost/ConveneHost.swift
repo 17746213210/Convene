@@ -36,9 +36,7 @@ public final class ConveneHost {
     private let configuration: ConveneConfiguration
     private var listener: NWListener?
     private var connection: ConveneConnection?
-    private var ignoreClose = false
     private let queue = DispatchQueue(label: "convene.host")
-    /// `start` 之后、`stop` 之前为 true。进后台时系统会取消 NWListener，回前台靠这个标记决定要不要继续发布。
     private var publishing = false
     private var foregroundObserver: NSObjectProtocol?
 
@@ -68,7 +66,6 @@ public final class ConveneHost {
         closeListener()
     }
 
-    /// 重新发布 Bonjour。已有的 guest 连接留着，不因为监听重启被踢掉。
     private func openListener() {
         closeListener()
         do {
@@ -124,6 +121,7 @@ public final class ConveneHost {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.publishing else { return }
+                self.clearGuest(notify: self.hasGuest)
                 self.openListener()
             }
         }
@@ -201,12 +199,8 @@ public final class ConveneHost {
         connection.onClose = { [weak self] error in
             Task { @MainActor in
                 guard let self else { return }
+                guard self.connection === connection else { return }
                 self.connection = nil
-                if self.ignoreClose {
-                    self.ignoreClose = false
-                    self.hasGuest = false
-                    return
-                }
                 let wasConnected = self.hasGuest
                 self.hasGuest = false
                 if wasConnected {
@@ -223,10 +217,9 @@ public final class ConveneHost {
     private func clearGuest(notify: Bool) {
         let wasConnected = hasGuest
         hasGuest = false
-        if let connection {
-            ignoreClose = true
-            connection.cancel()
-        }
+        let old = connection
+        connection = nil
+        old?.cancel()
         if notify, wasConnected {
             delegate?.hostDidDisconnectGuest(self)
         }
