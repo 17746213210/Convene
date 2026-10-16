@@ -7,6 +7,11 @@
 
 import Foundation
 import Network
+#if os(iOS) || os(tvOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 @MainActor
 public protocol ConveneHostDelegate: AnyObject {
@@ -33,15 +38,39 @@ public final class ConveneHost {
     private var connection: ConveneConnection?
     private var ignoreClose = false
     private let queue = DispatchQueue(label: "convene.host")
+    /// `start` 之后、`stop` 之前为 true。进后台时系统会取消 NWListener，回前台靠这个标记决定要不要继续发布。
+    private var publishing = false
+    private var foregroundObserver: NSObjectProtocol?
 
     public init(configuration: ConveneConfiguration = ConveneConfiguration()) {
         self.configuration = configuration
         deviceId = UUID().uuidString
     }
 
+    deinit {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
+    }
+
     public func start(displayName: String) {
-        stop()
+        publishing = true
         self.displayName = displayName
+        watchForeground()
+        clearGuest(notify: true)
+        openListener()
+    }
+
+    public func stop() {
+        publishing = false
+        unwatchForeground()
+        clearGuest(notify: true)
+        closeListener()
+    }
+
+    /// 重新发布 Bonjour。已有的 guest 连接留着，不因为监听重启被踢掉。
+    private func openListener() {
+        closeListener()
         do {
             let listener = try NWListener(using: ConveneConfiguration.browseParameters())
             listener.service = NWListener.Service(
@@ -50,14 +79,19 @@ public final class ConveneHost {
                 domain: nil,
                 txtRecord: txtRecord()
             )
-            listener.newConnectionHandler = { [weak self] nw in
+            listener.newConnectionHandler = { [weak self, weak listener] nw in
                 MainActor.assumeIsolated {
-                    self?.accept(nw)
+                    guard let self, let listener, self.listener === listener else {
+                        nw.cancel()
+                        return
+                    }
+                    self.accept(nw)
                 }
             }
-            listener.stateUpdateHandler = { [weak self] state in
+            listener.stateUpdateHandler = { [weak self, weak listener] state in
                 MainActor.assumeIsolated {
-                    self?.handleListener(state)
+                    guard let self, let listener, self.listener === listener else { return }
+                    self.handleListener(state)
                 }
             }
             listener.start(queue: .main)
@@ -68,11 +102,38 @@ public final class ConveneHost {
         }
     }
 
-    public func stop() {
-        clearGuest(notify: true)
+    private func closeListener() {
         listener?.cancel()
         listener = nil
         isDiscoverable = false
+    }
+
+    private func watchForeground() {
+        guard foregroundObserver == nil else { return }
+        #if os(iOS) || os(tvOS)
+        let name = UIApplication.willEnterForegroundNotification
+        #elseif os(macOS)
+        let name = NSApplication.willBecomeActiveNotification
+        #else
+        return
+        #endif
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: name,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.publishing else { return }
+                self.openListener()
+            }
+        }
+    }
+
+    private func unwatchForeground() {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+            self.foregroundObserver = nil
+        }
     }
 
     @discardableResult

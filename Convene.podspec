@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'Convene'
-  s.version          = '1.0.3'
+  s.version          = '1.0.4'
   s.summary          = 'Nearby devices find each other and exchange UTF-8 messages on the LAN.'
   s.description      = <<-DESC
     Convene is a host/guest channel: Bonjour discovery, one TCP session, string payloads.
