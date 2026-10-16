@@ -8,6 +8,11 @@
 import Darwin
 import Foundation
 import Network
+#if os(iOS) || os(tvOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 @MainActor
 public protocol ConveneBrowserDelegate: AnyObject {
@@ -35,13 +40,35 @@ public final class ConveneBrowser {
     private let addressResolver = ConveneAddressResolver()
     private var resolveGeneration = 0
     private let queue = DispatchQueue(label: "convene.browser")
+    /// `start()` 之后、`stop()` 之前为 true。进后台时系统会取消 NWBrowser，回前台靠这个标记决定要不要继续找。
+    private var browsing = false
+    private var foregroundObserver: NSObjectProtocol?
 
     public init(configuration: ConveneConfiguration = ConveneConfiguration()) {
         self.configuration = configuration
     }
 
+    deinit {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
+    }
+
     public func start() {
-        stop(notify: false)
+        browsing = true
+        watchForeground()
+        openBrowsers()
+    }
+
+    public func stop() {
+        browsing = false
+        unwatchForeground()
+        tearDown(notify: true)
+    }
+
+    /// 重新建立 Bonjour 浏览。已在查找中时调用不会清掉「还在查找」的标记。
+    private func openBrowsers() {
+        tearDown(notify: false)
         let browser = NWBrowser(
             for: .bonjourWithTXTRecord(type: configuration.serviceType, domain: nil),
             using: ConveneConfiguration.browseParameters()
@@ -67,10 +94,6 @@ public final class ConveneBrowser {
         browser.start(queue: .main)
         self.browser = browser
         startAirPlayBrowse()
-    }
-
-    public func stop() {
-        stop(notify: true)
     }
 
     private func startAirPlayBrowse() {
@@ -155,7 +178,35 @@ public final class ConveneBrowser {
         }
     }
 
-    private func stop(notify: Bool) {
+    private func watchForeground() {
+        guard foregroundObserver == nil else { return }
+        #if os(iOS) || os(tvOS)
+        let name = UIApplication.willEnterForegroundNotification
+        #elseif os(macOS)
+        let name = NSApplication.willBecomeActiveNotification
+        #else
+        return
+        #endif
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: name,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.browsing else { return }
+                self.openBrowsers()
+            }
+        }
+    }
+
+    private func unwatchForeground() {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+            self.foregroundObserver = nil
+        }
+    }
+
+    private func tearDown(notify: Bool) {
         resolveGeneration += 1
         addressResolver.cancelAll()
         browser?.cancel()
