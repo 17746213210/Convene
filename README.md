@@ -6,7 +6,7 @@
 - 一条 TCP 会话，同一时刻一个对端
 - 连上之后两端都能发、都能收
 - 帧：应用消息 / ping / pong / close
-- iOS 15+、tvOS 15+、macOS 12+
+- iOS 13+、tvOS 15+、macOS 12+
 
 ## 角色
 
